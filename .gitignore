@@ -1,0 +1,6 @@
+# dataset folder to prevent large uploads
+data
+# default virtual environment folder
+venv
+# python cache
+__pycache__
