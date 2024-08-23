@@ -4,11 +4,16 @@ import pandas_market_calendars as mcal
 import torch
 import os
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, List
+from datetime import datetime
 import yfinance as yf
 from torch.utils.data import DataLoader
 
 DATASET_DIR = "data"
+
+def _str_to_date(date_string: str):
+    return datetime.strptime(date_string, "%Y-%m-%d")
+
 
 def get_trading_days(start_date, end_date, exchange='NYSE', dates_only=False):
     """Get trading hours/day for an exchange.
@@ -58,32 +63,57 @@ def normalize(x: torch.Tensor, dim=1) -> torch.Tensor:
     return (x - x_min) / (x_max - x_min)
 
 
-def _save_stock_data(stock_data: pd.DataFrame, file_path: Path):
-    os.makedirs(Path(__file__).resolve().parent / DATASET_DIR, exist_ok=True)
+def _save_stock_data(stock_data: pd.DataFrame, file_path: Path, interval: str):
+    os.makedirs(Path(__file__).resolve().parent /
+                DATASET_DIR / interval, exist_ok=True)
+    if os.path.exists(file_path):
+        # update existing data
+        previous_stock_data = pd.read_csv(file_path, index_col="Time")
+        previous_stock_data.index = pd.to_datetime(
+            previous_stock_data.index)
+        stock_data = pd.concat(
+            [previous_stock_data, stock_data]).sort_index()
     stock_data.to_csv(file_path)
 
 
-def get_stock_data_by_symbol_yf(symbol: str, start_date, end_date) -> pd.DataFrame:
+def get_stock_data_by_symbol_yf(symbol: str, start_date, end_date, interval="1d", sma_periods: List[int] | None = None) -> pd.DataFrame:
     """Get training data for a symbol and time period.
 
     Args:
         symbol (str): Ticker symbol of the stock.
         start_date (str): Start date.
         end_date (str): End date.
+        interval (str): Frequency of stock data. Defaults to "1d".
+        sma_periods (List[int]): List of SMA to compute with the given number of periods. Defaults to [20, 50, 100].
     Returns:
         pd.DataFrame: Stock data.
     """
+    if sma_periods is None:
+        sma_periods = [20, 50, 100]
     # check if data is already saved
-    file_path = Path(__file__).resolve().parent / DATASET_DIR / f"{symbol}.csv"
+    file_path = Path(__file__).resolve().parent / \
+        DATASET_DIR / interval / f"{symbol}.csv"
     if os.path.exists(file_path):
-        return pd.read_csv(file_path)
+        stock_data = pd.read_csv(file_path, index_col="Time")
+        stock_data.index = pd.to_datetime(stock_data.index)
+        # check if requested period is contained in file (assuming that yf.download does return data INCLUDING the end_date, this should work)
+        if ((stock_data.index[0] <= _str_to_date(start_date))
+                and (stock_data.index[-1] >= _str_to_date(end_date))):
+            mask = (stock_data.index >= _str_to_date(start_date)) & (
+                stock_data.index <= _str_to_date(end_date))
+            # compute sma
+            for sma in sma_periods:
+                stock_data = compute_SMA(stock_data, sma)
+            # NOTE: this data could contain less NaNs because SMA is computed before applying the mask
+            return stock_data.loc[mask]
     # download data
-    stock_data = yf.download(symbol, start_date, end_date)
-    stock_data = compute_SMA(stock_data, 20)
-    stock_data = compute_SMA(stock_data, 50)
-    stock_data = compute_SMA(stock_data, 100)
+    stock_data = yf.download(symbol, start_date, end_date, interval=interval)
+    stock_data.index.name = "Time"
     # save data
-    _save_stock_data(stock_data, file_path)
+    _save_stock_data(stock_data, file_path, interval)
+    # compute sma
+    for sma in sma_periods:
+        stock_data = compute_SMA(stock_data, sma)
     return stock_data
 
 ###########################################################################################################################
@@ -148,3 +178,17 @@ def create_labels_simple(stock_data: pd.DataFrame, training_period: int, max_sma
         (x_tensor[:, :5], volume_ratios, x_tensor[:, -2:]), dim=1)
 
     return x_tensor, y_tensor
+
+
+# tests
+if __name__ == "__main__":
+    ticker = "GME"
+    a_start = "2023-02-01"
+    b_start = "2023-01-01"
+    a_end = "2023-04-02"
+    b_end = "2023-03-01"
+    df = get_stock_data_by_symbol_yf(ticker,
+                                     b_start,
+                                     b_end,
+                                     )
+    print(df.iloc[0], df.iloc[-1])
