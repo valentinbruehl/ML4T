@@ -1,11 +1,12 @@
 import json
 import pandas as pd
+from pathlib import Path
 
 
 
 def load_data():
     # downloads the json file with all relevant data for the fear and greed index
-    with open('FAGI_since_2023.json') as file:
+    with open(Path(__file__).resolve() / 'data' / 'FAGI_since_2023.json') as file:
         data = json.load(file)
     # extracts the relevant data from json file
     data_points = data["fear_and_greed_historical"]["data"]

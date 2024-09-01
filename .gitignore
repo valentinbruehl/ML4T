@@ -1,5 +1,6 @@
-# dataset folder to prevent large uploads
-data
+# dataset folder (except FAGI json) to prevent large uploads
+data/*
+!data/FAGI_since_2023.json
 # default virtual environment folder
 venv
 # python cache
