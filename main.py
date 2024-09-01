@@ -30,6 +30,8 @@ stock = 'GS'
 start_date = '2023-01-01'
 end_date = '2024-01-05'
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
 # inputs:
 D_i, D_k, D_o = 8, 4, 1
 training_period = 120
@@ -45,7 +47,7 @@ model = nn.Sequential(
     nn.LeakyReLU(),
     nn.Linear(D_k, D_o),
     nn.Sigmoid(),
-)
+).to(device)
 
 
 def weights_init(layer_in):
@@ -85,9 +87,9 @@ if __name__ == "__main__":
             # zero the parameter gradients
             optimizer.zero_grad()
             # forward pass
-            pred = model(x_batch)
+            pred = model(x_batch.to(device))
             print(pred.flatten().tolist())
-            loss = criterion(pred, y_batch)
+            loss = criterion(pred, y_batch.to(device))
             # backward pass
             loss.backward()
             # Gradient clipping
@@ -109,7 +111,7 @@ if __name__ == "__main__":
         # x, y = create_labels(101 + training_period)
         x, y = create_labels_simple(
             stock_data, training_period=training_period, max_sma_window_size=100+training_period)
-        pred = model(x)
+        pred = model(x.to(device))
         pred = pred.flatten().tolist()
         y = y.tolist()
         num_of_true_positives = 0
