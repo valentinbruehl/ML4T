@@ -1,2 +1,23 @@
-something
-something more, can I push this
+VWAP (volume-weighted-average-price)
+
+Relative Strength index (RSI) --> speed and change of price movements
+
+Moving Average convergence divergence, e.g. relationship between 20 day sma and 100 day sma 
+
+(kind of doubled, as we already have the sma's)
+
+Stochastic Oscillator (compares closing price with severel key historical prices (highs, lows)) --> indicates momentum
+
+Bollinger Bands (standard deviations of sma line (don't know which sma, but can check))
+
+exponential moving average (more weight to recent price moves --> more responsive to new information)
+
+put / call ratio --> not so relevant for large cap but might include anyway
+
+some general economic indicator related to gdp growth, unemployment rate etc. --> Need to find an indicator which updates more regularly than once a month
+
+Index Performances: SPX, sector indexes, emerging markets, small cap indexes
+
+bid/ask spread --> provides insight into market liquidity and volatility (I think: high spread --> low liquidity)
+
+Days until next financial data release or annual shareholder meeting
