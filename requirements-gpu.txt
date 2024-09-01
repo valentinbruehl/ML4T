@@ -1,0 +1,5 @@
+torch>=2.0.0+cu118
+pandas-market-calendars
+yfinance
+numpy
+pandas
