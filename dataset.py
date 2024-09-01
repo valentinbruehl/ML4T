@@ -8,6 +8,7 @@ from typing import Tuple, List
 from datetime import datetime
 import yfinance as yf
 from torch.utils.data import DataLoader
+from scipy.signal import argrelextrema
 
 DATASET_DIR = "data"
 
@@ -34,32 +35,20 @@ def get_trading_days(start_date, end_date, exchange='NYSE', dates_only=False):
 
 
 def compute_SMA(stock_data: pd.DataFrame, num_periods: int):
-    """Computes simple moving average.
-
-    Args:
-        stock_data (pd.DataFrame): Input dataframe.
-        num_periods (int): Size of the rolling window.
-
-    Returns:
-        pd.DataFrame: Original Dataframe with appended SMA column.
+    """
+    Computes simple moving average.
     """
     stock_data[f'SMA_{num_periods}'] = stock_data['Close'].rolling(
         window=num_periods).mean()
     return stock_data
 
 
-def normalize(x: torch.Tensor, dim=1) -> torch.Tensor:
-    """MinMax Norm (normalized to [0, 1] along given axis)
-
-    Args:
-        x (torch.Tensor): Input tensor.
-        dim (int, optional): The axis normalized. Defaults to 1.
-
-    Returns:
-        torch.Tensor: Normalized tensor.
+def normalize_axis(x: torch.Tensor, axis=1) -> torch.Tensor:
     """
-    x_min, _idcs = torch.min(x, dim=dim, keepdim=True)
-    x_max, _idcs = torch.max(x, dim=dim, keepdim=True)
+    MinMax Norm (normalized to [0, 1] along given axis)
+    """
+    x_min, _idcs = torch.min(x, dim=axis, keepdim=True)
+    x_max, _idcs = torch.max(x, dim=axis, keepdim=True)
     return (x - x_min) / (x_max - x_min)
 
 
@@ -166,7 +155,7 @@ def create_labels_simple(stock_data: pd.DataFrame, training_period: int, max_sma
     y_tensor = torch.tensor(y)
 
     # norm all except volume cuz volume kinda big number
-    x_tensor = normalize(x_tensor)
+    x_tensor = normalize_axis(x_tensor, axis=1)  # NOTE: this is wrong
 
     # sooo yeah volume is kinda... meh: it needs to be a small, yet "independent" number that carries useful information
     # random idea: ratio that shows whether volume increased or not (there are better ways than this)
@@ -178,6 +167,51 @@ def create_labels_simple(stock_data: pd.DataFrame, training_period: int, max_sma
         (x_tensor[:, :5], volume_ratios, x_tensor[:, -2:]), dim=1)
 
     return x_tensor, y_tensor
+
+
+###########################################################################################################################
+# Advanced labeling functions
+###########################################################################################################################
+
+def _preprocess_data(data: pd.DataFrame, training_period: int) -> pd.DataFrame:
+    # automatically discard incomplete rows (instead of using max_sma_window_size to remove the first rows)
+    data = data.dropna(axis=0)
+    # cut data
+    return data[:training_period]
+
+
+def create_labels_local_min_max(stock_data: pd.DataFrame, training_period: int, extrema_distance: int, sma_periods: List[int] | None = None) -> Tuple[torch.Tensor, torch.Tensor]:
+    if sma_periods is None:
+        sma_periods = [20, 50, 100]
+
+    stock_data = _preprocess_data(stock_data, training_period)
+
+    # find extrema (marked with 1 if local extrema)
+    stock_data["Min"] = stock_data.iloc[argrelextrema(
+        stock_data["High"].values, np.less_equal, order=extrema_distance)[0]]["High"] > 0
+    stock_data["Max"] = stock_data.iloc[argrelextrema(
+        stock_data["High"].values, np.greater_equal, order=extrema_distance)[0]]["High"] > 0
+
+    # create x, y
+    x = torch.tensor([stock_data['Open'], stock_data['Adj Close'],
+                      stock_data['High'], stock_data['Low'], *[stock_data[f'SMA_{n}'] for n in sma_periods]])
+    y = []
+    assert len(stock_data["Min"].shape) == 1  # TODO: remove later if not triggered
+    for is_min, is_max in zip(stock_data["Min"].to_list(), stock_data["Max"].to_list()):
+        if is_min:
+            y.append(-1)
+        elif is_max:
+            y.append(1)
+        y.append(0)
+
+    y = torch.tensor(y, dtype=torch.int)
+
+    # normalize x
+    x = normalize_axis(x, axis=0)  # normalize each row
+
+    # TODO: add volume and F&G data
+
+    return x, y
 
 
 # tests
