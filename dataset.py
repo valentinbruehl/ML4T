@@ -12,11 +12,12 @@ from scipy.signal import argrelextrema
 
 DATASET_DIR = "data"
 
+
 def _str_to_date(date_string: str):
     return datetime.strptime(date_string, "%Y-%m-%d")
 
 
-def get_trading_days(start_date, end_date, exchange='NYSE', dates_only=False):
+def get_trading_days(start_date, end_date, exchange="NYSE", dates_only=False):
     """Get trading hours/day for an exchange.
 
     Args:
@@ -38,8 +39,63 @@ def compute_SMA(stock_data: pd.DataFrame, num_periods: int):
     """
     Computes simple moving average.
     """
-    stock_data[f'SMA_{num_periods}'] = stock_data['Close'].rolling(
-        window=num_periods).mean()
+    stock_data[f"SMA_{num_periods}"] = (
+        stock_data["Close"].rolling(window=num_periods).mean()
+    )
+    return stock_data
+
+
+def compute_VWAP(stock_data: pd.DataFrame):
+    # AS a timeframe, we use 10 days and get each day as a data point
+    # usually, VWAP is calculated with data points every 10-15 minutes, and is primarily used for intraday trading
+    # formula: sum(average price * volume) / sum(volume)
+    stock_data["VWAP"] = (
+        stock_data.rolling(window=10).sum(
+            (stock_data["High"] + stock_data["Low"]) * stock_data["Volume"]
+        )
+        / stock_data["Volume"].rolling(window=10).sum()
+    )
+    return stock_data
+
+
+def compute_EMA(stock_data: pd.DataFrame, num_periods: int):
+    # similiar to SMA, but revent days are given more weight, hence recent changes have stronger influence on sma
+    # weighting factor can be changed, 2 is a common choice
+    # not optimal, as every day is computed 20 times
+
+    weighting = 2
+    ema = np.zeros(num_periods)
+    ema[0] = stock_data["Adj Close"][:-num_periods].rolling(window=num_periods).mean()
+    for i in range(1, num_periods):
+        ema[i] = (
+            stock_data["Adj Close"][: -(num_periods - i)]
+            * weighting
+            / (1 + num_periods)
+        )
+        +ema[i - 1] * (1 - weighting / (1 + num_periods))
+    # this is not finished
+
+
+def compute_MACD(stock_data: pd.DataFrame):
+    # Moving Average Convergence/divergence
+    # formula: 12 day ema - 26 day ema
+    return compute_EMA(stock_data=stock_data, num_periods=12) - compute_EMA(
+        stock_data=stock_data, num_periods=26
+    )
+
+
+def compute_Bollinger_Bands(stock_data: pd.DataFrame):
+    # returns 2 values, the upper and lower bollinger band respectively
+    # it is commonly calculated with the 20-day sma line
+
+    stock_data["Upper_Bollinger_Band"] = (
+        stock_data["Close"].rolling(window=20).mean()
+        + 2 * stock_data["Close"].rolling(window=20).std()
+    )
+    stock_data["Lower_Bollinger_Band"] = (
+        stock_data["Close"].rolling(window=20).mean()
+        - 2 * stock_data["Close"].rolling(window=20).std()
+    )
     return stock_data
 
 
@@ -53,19 +109,22 @@ def normalize_axis(x: torch.Tensor, axis=1) -> torch.Tensor:
 
 
 def _save_stock_data(stock_data: pd.DataFrame, file_path: Path, interval: str):
-    os.makedirs(Path(__file__).resolve().parent /
-                DATASET_DIR / interval, exist_ok=True)
+    os.makedirs(Path(__file__).resolve().parent / DATASET_DIR / interval, exist_ok=True)
     if os.path.exists(file_path):
         # update existing data
         previous_stock_data = pd.read_csv(file_path, index_col="Time")
-        previous_stock_data.index = pd.to_datetime(
-            previous_stock_data.index)
-        stock_data = pd.concat(
-            [previous_stock_data, stock_data]).sort_index()
+        previous_stock_data.index = pd.to_datetime(previous_stock_data.index)
+        stock_data = pd.concat([previous_stock_data, stock_data]).sort_index()
     stock_data.to_csv(file_path)
 
 
-def get_stock_data_by_symbol_yf(symbol: str, start_date, end_date, interval="1d", sma_periods: List[int] | None = None) -> pd.DataFrame:
+def get_stock_data_by_symbol_yf(
+    symbol: str,
+    start_date,
+    end_date,
+    interval="1d",
+    sma_periods: List[int] | None = None,
+) -> pd.DataFrame:
     """Get training data for a symbol and time period.
 
     Args:
@@ -80,16 +139,19 @@ def get_stock_data_by_symbol_yf(symbol: str, start_date, end_date, interval="1d"
     if sma_periods is None:
         sma_periods = [20, 50, 100]
     # check if data is already saved
-    file_path = Path(__file__).resolve().parent / \
-        DATASET_DIR / interval / f"{symbol}.csv"
+    file_path = (
+        Path(__file__).resolve().parent / DATASET_DIR / interval / f"{symbol}.csv"
+    )
     if os.path.exists(file_path):
         stock_data = pd.read_csv(file_path, index_col="Time")
         stock_data.index = pd.to_datetime(stock_data.index)
         # check if requested period is contained in file (assuming that yf.download does return data INCLUDING the end_date, this should work)
-        if ((stock_data.index[0] <= _str_to_date(start_date))
-                and (stock_data.index[-1] >= _str_to_date(end_date))):
+        if (stock_data.index[0] <= _str_to_date(start_date)) and (
+            stock_data.index[-1] >= _str_to_date(end_date)
+        ):
             mask = (stock_data.index >= _str_to_date(start_date)) & (
-                stock_data.index <= _str_to_date(end_date))
+                stock_data.index <= _str_to_date(end_date)
+            )
             # compute sma
             for sma in sma_periods:
                 stock_data = compute_SMA(stock_data, sma)
@@ -105,6 +167,7 @@ def get_stock_data_by_symbol_yf(symbol: str, start_date, end_date, interval="1d"
         stock_data = compute_SMA(stock_data, sma)
     return stock_data
 
+
 ###########################################################################################################################
 # Labeling functions
 ###########################################################################################################################
@@ -114,7 +177,9 @@ def get_stock_data_by_symbol_yf(symbol: str, start_date, end_date, interval="1d"
 # training period of 60 days
 
 
-def create_labels_simple(stock_data: pd.DataFrame, training_period: int, max_sma_window_size=100) -> Tuple[torch.Tensor, torch.Tensor]:
+def create_labels_simple(
+    stock_data: pd.DataFrame, training_period: int, max_sma_window_size=100
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """Example for labeling data. Not (yet) finalized.
 
     Args:
@@ -129,23 +194,32 @@ def create_labels_simple(stock_data: pd.DataFrame, training_period: int, max_sma
     x = np.zeros((training_period, 7), dtype=np.float32)
     y = np.zeros((training_period, 1), dtype=np.float32)
     volume = torch.zeros((training_period, 1))
-    part_of_data = stock_data[days_after_start_record:
-                              days_after_start_record + training_period]
+    part_of_data = stock_data[
+        days_after_start_record : days_after_start_record + training_period
+    ]
     # ganz anders vorgehen:
     count = 0
     price_of_last_day = 0
     for i, value in part_of_data.iterrows():
         day_data = value
-        x[count] = torch.tensor([day_data['Open'], day_data['Adj Close'],
-                                 day_data['SMA_20'], day_data['SMA_50'],
-                                 day_data['SMA_100'],
-                                 day_data['High'], day_data['Low']])
+        x[count] = torch.tensor(
+            [
+                day_data["Open"],
+                day_data["Adj Close"],
+                day_data["SMA_20"],
+                day_data["SMA_50"],
+                day_data["SMA_100"],
+                day_data["High"],
+                day_data["Low"],
+            ]
+        )
         # print(stock_data.get(i+1, {}).get('Close', 0), day_data.get('Close', 0))
-        volume[count] = torch.tensor([day_data['Volume']])
+        volume[count] = torch.tensor([day_data["Volume"]])
         if count != 0:
-            y[count - 1] = torch.tensor([1.0] if day_data['Adj Close']
-                                        > price_of_last_day else [0.0])
-        price_of_last_day = day_data['Adj Close']
+            y[count - 1] = torch.tensor(
+                [1.0] if day_data["Adj Close"] > price_of_last_day else [0.0]
+            )
+        price_of_last_day = day_data["Adj Close"]
         count += 1
 
     # set last item randomly to zero, as I do not know how to deal with it
@@ -159,12 +233,10 @@ def create_labels_simple(stock_data: pd.DataFrame, training_period: int, max_sma
 
     # sooo yeah volume is kinda... meh: it needs to be a small, yet "independent" number that carries useful information
     # random idea: ratio that shows whether volume increased or not (there are better ways than this)
-    shifted_vol = torch.cat((torch.tensor([[1]]),  # padding
-                             volume[:-1]), dim=0)
+    shifted_vol = torch.cat((torch.tensor([[1]]), volume[:-1]), dim=0)  # padding
     volume_ratios = volume / shifted_vol
     # insert volume tensor
-    x_tensor = torch.cat(
-        (x_tensor[:, :5], volume_ratios, x_tensor[:, -2:]), dim=1)
+    x_tensor = torch.cat((x_tensor[:, :5], volume_ratios, x_tensor[:, -2:]), dim=1)
 
     return x_tensor, y_tensor
 
@@ -173,6 +245,7 @@ def create_labels_simple(stock_data: pd.DataFrame, training_period: int, max_sma
 # Advanced labeling functions
 ###########################################################################################################################
 
+
 def _preprocess_data(data: pd.DataFrame, training_period: int) -> pd.DataFrame:
     # automatically discard incomplete rows (instead of using max_sma_window_size to remove the first rows)
     data = data.dropna(axis=0)
@@ -180,21 +253,45 @@ def _preprocess_data(data: pd.DataFrame, training_period: int) -> pd.DataFrame:
     return data[:training_period]
 
 
-def create_labels_local_min_max(stock_data: pd.DataFrame, training_period: int, extrema_distance: int, sma_periods: List[int] | None = None) -> Tuple[torch.Tensor, torch.Tensor]:
+def create_labels_local_min_max(
+    stock_data: pd.DataFrame,
+    training_period: int,
+    extrema_distance: int,
+    sma_periods: List[int] | None = None,
+) -> Tuple[torch.Tensor, torch.Tensor]:
     if sma_periods is None:
         sma_periods = [20, 50, 100]
 
     stock_data = _preprocess_data(stock_data, training_period)
 
     # find extrema (marked with 1 if local extrema)
-    stock_data["Min"] = stock_data.iloc[argrelextrema(
-        stock_data["High"].values, np.less_equal, order=extrema_distance)[0]]["High"] > 0
-    stock_data["Max"] = stock_data.iloc[argrelextrema(
-        stock_data["High"].values, np.greater_equal, order=extrema_distance)[0]]["High"] > 0
+    stock_data["Min"] = (
+        stock_data.iloc[
+            argrelextrema(
+                stock_data["High"].values, np.less_equal, order=extrema_distance
+            )[0]
+        ]["High"]
+        > 0
+    )
+    stock_data["Max"] = (
+        stock_data.iloc[
+            argrelextrema(
+                stock_data["High"].values, np.greater_equal, order=extrema_distance
+            )[0]
+        ]["High"]
+        > 0
+    )
 
     # create x, y
-    x = torch.tensor([stock_data['Open'], stock_data['Adj Close'],
-                      stock_data['High'], stock_data['Low'], *[stock_data[f'SMA_{n}'] for n in sma_periods]])
+    x = torch.tensor(
+        [
+            stock_data["Open"],
+            stock_data["Adj Close"],
+            stock_data["High"],
+            stock_data["Low"],
+            *[stock_data[f"SMA_{n}"] for n in sma_periods],
+        ]
+    )
     y = []
     assert len(stock_data["Min"].shape) == 1  # TODO: remove later if not triggered
     for is_min, is_max in zip(stock_data["Min"].to_list(), stock_data["Max"].to_list()):
@@ -221,8 +318,9 @@ if __name__ == "__main__":
     b_start = "2023-01-01"
     a_end = "2023-04-02"
     b_end = "2023-03-01"
-    df = get_stock_data_by_symbol_yf(ticker,
-                                     b_start,
-                                     b_end,
-                                     )
+    df = get_stock_data_by_symbol_yf(
+        ticker,
+        b_start,
+        b_end,
+    )
     print(df.iloc[0], df.iloc[-1])

@@ -2,9 +2,7 @@ VWAP (volume-weighted-average-price)
 
 Relative Strength index (RSI) --> speed and change of price movements
 
-Moving Average convergence divergence, e.g. relationship between 20 day sma and 100 day sma 
-
-(kind of doubled, as we already have the sma's)
+Moving Average convergence divergence, e.g. relationship between 20 day ema and 100 day ema 
 
 Stochastic Oscillator (compares closing price with severel key historical prices (highs, lows)) --> indicates momentum
 
