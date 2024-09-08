@@ -63,17 +63,14 @@ def compute_EMA(stock_data: pd.DataFrame, num_periods: int):
     # weighting factor can be changed, 2 is a common choice
     # not optimal, as every day is computed 20 times
 
-    weighting = 2
-    ema = np.zeros(num_periods)
-    ema[0] = stock_data["Adj Close"][:-num_periods].rolling(window=num_periods).mean()
-    for i in range(1, num_periods):
-        ema[i] = (
-            stock_data["Adj Close"][: -(num_periods - i)]
-            * weighting
-            / (1 + num_periods)
-        )
-        +ema[i - 1] * (1 - weighting / (1 + num_periods))
-    # this is not finished
+
+    # adjust=False means that the weights of each data point are not adjusted so they sum to 1
+    # in the traditional calculation of EMA, the weights are not adjusted
+    # span = number of days respected in calculation
+    # alpha = 2 / (span + 1)
+
+    stock_data['EMA'] = stock_data['Adj Close'].ewm(span=num_periods, alpha=2 / (num_periods + 1), adjust=False).mean()
+    return stock_data
 
 
 def compute_MACD(stock_data: pd.DataFrame):
