@@ -5,3 +5,8 @@ data/*
 venv
 # python cache
 __pycache__
+# vscode
+.vscode
+# ibkr folder (i dont want to upload my api key lol)
+ibkr/*
+!ibkr/api.py
