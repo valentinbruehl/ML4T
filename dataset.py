@@ -76,10 +76,10 @@ def compute_EMA(stock_data: pd.DataFrame, num_periods: int):
 def compute_MACD(stock_data: pd.DataFrame):
     # Moving Average Convergence/divergence
     # formula: 12 day ema - 26 day ema
-    return compute_EMA(stock_data=stock_data, num_periods=12) - compute_EMA(
+    stock_data['MACD'] = compute_EMA(stock_data=stock_data, num_periods=12) - compute_EMA(
         stock_data=stock_data, num_periods=26
     )
-
+    return stock_data
 
 def compute_Bollinger_Bands(stock_data: pd.DataFrame):
     # returns 2 values, the upper and lower bollinger band respectively
@@ -149,6 +149,14 @@ def get_stock_data_by_symbol_yf(
             mask = (stock_data.index >= _str_to_date(start_date)) & (
                 stock_data.index <= _str_to_date(end_date)
             )
+            # compute ema
+            stock_data = compute_EMA(stock_data=stock_data, num_periods=20)
+            # compute Bollinger Bands
+            stock_data = compute_Bollinger_Bands(stock_data)
+            # compute MACD (moving average convergence divergence)
+            stock_data = compute_MACD(stock_data)
+            # compute VWAP
+            stock_data = compute_VWAP(stock_data)
             # compute sma
             for sma in sma_periods:
                 stock_data = compute_SMA(stock_data, sma)
@@ -287,6 +295,11 @@ def create_labels_local_min_max(
             stock_data["High"],
             stock_data["Low"],
             *[stock_data[f"SMA_{n}"] for n in sma_periods],
+            stock_data['VWAP'],
+            stock_data['EMA'],
+            stock_data['MACD'],
+            stock_data['Lower_Bollinger_Band'],
+            stock_data['Upper_Bollinger_Band'],
         ]
     )
     y = []
