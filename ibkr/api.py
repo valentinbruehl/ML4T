@@ -9,10 +9,14 @@ from typing import Callable
 import logging
 from abc import ABC, abstractmethod
 import time
+import urllib3
 
 # configure logging
-logging.basicConfig(level=logging.DEBUG,  # TODO: change to logging.WARNING
+logging.basicConfig(level=logging.WARNING, # logging.DEBUG
                     format='%(asctime)s - %(levelname)s - %(message)s')
+logging.captureWarnings(True)
+# Unverified HTTPS request to gateway is fine
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # check for ibkr gateway and get baseUrl
 GATEWAY_ENABLED = False
@@ -27,8 +31,9 @@ if os.path.exists(_GATEWAY_DIR):
     baseUrl = f"https://localhost:{config['listenPort']}/v1/api"
     # attempt connection
     try:
-        _reponse = requests.get(baseUrl)
-        GATEWAY_ENABLED = _reponse.status_code == 401
+        # should throw an Exception if unreachable
+        requests.get(baseUrl, verify=False)
+        GATEWAY_ENABLED = True
     except requests.exceptions.ConnectionError:
         pass
 
