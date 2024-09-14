@@ -9,8 +9,14 @@ from datetime import datetime
 import yfinance as yf
 from torch.utils.data import DataLoader
 from scipy.signal import argrelextrema
+from ibkr.api import WebAPI
 
 DATASET_DIR = "data"
+
+# init web api
+WEBAPI = WebAPI()
+WEBAPI.return_as_pandas = True
+WEBAPI.DO_REQUEST_CACHING = True
 
 
 def _str_to_date(date_string: str):
@@ -63,13 +69,13 @@ def compute_EMA(stock_data: pd.DataFrame, num_periods: int):
     # weighting factor can be changed, 2 is a common choice
     # not optimal, as every day is computed 20 times
 
-
     # adjust=False means that the weights of each data point are not adjusted so they sum to 1
     # in the traditional calculation of EMA, the weights are not adjusted
     # span = number of days respected in calculation
     # alpha = 2 / (span + 1)
 
-    stock_data['EMA'] = stock_data['Adj Close'].ewm(span=num_periods, alpha=2 / (num_periods + 1), adjust=False).mean()
+    stock_data['EMA'] = stock_data['Close'].ewm(
+        span=num_periods, alpha=2 / (num_periods + 1), adjust=False).mean()
     return stock_data
 
 
@@ -80,6 +86,7 @@ def compute_MACD(stock_data: pd.DataFrame):
         stock_data=stock_data, num_periods=26
     )
     return stock_data
+
 
 def compute_Bollinger_Bands(stock_data: pd.DataFrame):
     # returns 2 values, the upper and lower bollinger band respectively
@@ -106,7 +113,8 @@ def normalize_axis(x: torch.Tensor, axis=1) -> torch.Tensor:
 
 
 def _save_stock_data(stock_data: pd.DataFrame, file_path: Path, interval: str):
-    os.makedirs(Path(__file__).resolve().parent / DATASET_DIR / interval, exist_ok=True)
+    os.makedirs(Path(__file__).resolve().parent /
+                DATASET_DIR / interval, exist_ok=True)
     if os.path.exists(file_path):
         # update existing data
         previous_stock_data = pd.read_csv(file_path, index_col="Time")
@@ -114,8 +122,8 @@ def _save_stock_data(stock_data: pd.DataFrame, file_path: Path, interval: str):
         stock_data = pd.concat([previous_stock_data, stock_data]).sort_index()
     stock_data.to_csv(file_path)
 
-
-def get_stock_data_by_symbol_yf(
+# deprecated
+def _get_stock_data_by_symbol_yf(
     symbol: str,
     start_date,
     end_date,
@@ -137,7 +145,8 @@ def get_stock_data_by_symbol_yf(
         sma_periods = [20, 50, 100]
     # check if data is already saved
     file_path = (
-        Path(__file__).resolve().parent / DATASET_DIR / interval / f"{symbol}.csv"
+        Path(__file__).resolve().parent /
+        DATASET_DIR / interval / f"{symbol}.csv"
     )
     if os.path.exists(file_path):
         stock_data = pd.read_csv(file_path, index_col="Time")
@@ -172,6 +181,46 @@ def get_stock_data_by_symbol_yf(
         stock_data = compute_SMA(stock_data, sma)
     return stock_data
 
+#############################################################################################################
+# >>> caching behavior of the dataframe will be deprecated (for now !!!!!!!!) in favor of request caching <<<
+#############################################################################################################
+def get_stock_data_by_symbol_ibkr(
+        symbol: str,
+        start_date: datetime = None,
+        duration: str = "1y",
+        interval: str = "15min",
+        sma_periods: List[int] | None = None,
+) -> pd.DataFrame:
+    if sma_periods is None:
+        sma_periods = [20, 50, 100]
+
+    # TODO: maybe add caching here
+
+    # get data from ibkr api
+    stock_data = WEBAPI.get_historical(
+        symbol=symbol,
+        start=start_date,
+        duration=duration,
+        interval=interval,
+        outsideRth=True,  # outside regular trading hours
+    )
+    # compute ema
+    stock_data = compute_EMA(stock_data=stock_data, num_periods=20)
+    # compute Bollinger Bands
+    stock_data = compute_Bollinger_Bands(stock_data)
+    # compute MACD (moving average convergence divergence)
+    stock_data = compute_MACD(stock_data)
+    # compute VWAP
+    stock_data = compute_VWAP(stock_data)
+    # compute sma
+    for sma in sma_periods:
+        stock_data = compute_SMA(stock_data, sma)
+
+    return stock_data
+
+
+get_stock_data_by_symbol = get_stock_data_by_symbol_ibkr
+
 
 ###########################################################################################################################
 # Labeling functions
@@ -200,7 +249,7 @@ def create_labels_simple(
     y = np.zeros((training_period, 1), dtype=np.float32)
     volume = torch.zeros((training_period, 1))
     part_of_data = stock_data[
-        days_after_start_record : days_after_start_record + training_period
+        days_after_start_record: days_after_start_record + training_period
     ]
     # ganz anders vorgehen:
     count = 0
@@ -238,10 +287,12 @@ def create_labels_simple(
 
     # sooo yeah volume is kinda... meh: it needs to be a small, yet "independent" number that carries useful information
     # random idea: ratio that shows whether volume increased or not (there are better ways than this)
-    shifted_vol = torch.cat((torch.tensor([[1]]), volume[:-1]), dim=0)  # padding
+    shifted_vol = torch.cat(
+        (torch.tensor([[1]]), volume[:-1]), dim=0)  # padding
     volume_ratios = volume / shifted_vol
     # insert volume tensor
-    x_tensor = torch.cat((x_tensor[:, :5], volume_ratios, x_tensor[:, -2:]), dim=1)
+    x_tensor = torch.cat(
+        (x_tensor[:, :5], volume_ratios, x_tensor[:, -2:]), dim=1)
 
     return x_tensor, y_tensor
 
@@ -303,7 +354,8 @@ def create_labels_local_min_max(
         ]
     )
     y = []
-    assert len(stock_data["Min"].shape) == 1  # TODO: remove later if not triggered
+    # TODO: remove later if not triggered
+    assert len(stock_data["Min"].shape) == 1
     for is_min, is_max in zip(stock_data["Min"].to_list(), stock_data["Max"].to_list()):
         if is_min:
             y.append(-1)
@@ -328,7 +380,7 @@ if __name__ == "__main__":
     b_start = "2023-01-01"
     a_end = "2023-04-02"
     b_end = "2023-03-01"
-    df = get_stock_data_by_symbol_yf(
+    df = get_stock_data_by_symbol(
         ticker,
         b_start,
         b_end,
