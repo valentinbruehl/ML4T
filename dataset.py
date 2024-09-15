@@ -242,6 +242,10 @@ def get_stock_data_by_symbol_ibkr(
     # compute sma
     for sma in sma_periods:
         stock_data = compute_SMA(stock_data, sma)
+    # retrieve fear and greed index
+    stock_data = get_fear_and_greed_index(stock_data)
+    # compute RSI (relative strength index)
+    stock_data = compute_RSI(stock_data)
 
     return stock_data
 
