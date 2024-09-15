@@ -41,7 +41,7 @@ def get_trading_days(start_date, end_date, exchange="NYSE", dates_only=False):
     return dates_only_df if dates_only else trading_days
 
 
-def compute_SMA(stock_data: pd.DataFrame, num_periods: int):
+def compute_SMA(stock_data: pd.DataFrame, num_periods: int) -> pd.DataFrame:
     """
     Computes simple moving average.
     """
@@ -50,8 +50,35 @@ def compute_SMA(stock_data: pd.DataFrame, num_periods: int):
     )
     return stock_data
 
+def get_fear_and_greed_index(stock_data: pd.DataFrame) -> pd.DataFrame:
+    # currently, the JSON file contains data from 01-01-2023 to 22-08-2024
+    # this method should work independent from the time_frame in the JSON file
+    stock_data['FAGI'] = get_fear_and_greed_index()
 
-def compute_VWAP(stock_data: pd.DataFrame):
+
+def compute_RSI(stock_data: pd.DataFrame) -> pd.DataFrame:
+    # Relative Strength Index = 100 * average_positive_price_changes / 
+    # (average_positive_price_changes + average_negative_price_changes)
+
+    # calculate day-to-day changes for every entry in dataset --> first entry has Null value
+    deltas = stock_data['Adj Close'].diff()
+
+    deltas_up = deltas.copy()
+    deltas_down = deltas.copy()
+
+    # make one list of postive day-to-day changes and one of negative
+    deltas_up[deltas_up<0] = 0
+    deltas_down[deltas_down>0] = 0
+
+    # calculate mean over 14 day timeframe
+    mean_delta_up = deltas_up.rolling(14).mean()
+    mean_delta_down = deltas_down.rolling(14).mean()
+
+    stock_data['RSI'] = 100 * mean_delta_up / (mean_delta_up + mean_delta_down)
+    
+    return stock_data
+
+def compute_VWAP(stock_data: pd.DataFrame) -> pd.DataFrame:
     # AS a timeframe, we use 10 days and get each day as a data point
     # usually, VWAP is calculated with data points every 10-15 minutes, and is primarily used for intraday trading
     # formula: sum(average price * volume) / sum(volume)
@@ -64,7 +91,7 @@ def compute_VWAP(stock_data: pd.DataFrame):
     return stock_data
 
 
-def compute_EMA(stock_data: pd.DataFrame, num_periods: int):
+def compute_EMA(stock_data: pd.DataFrame, num_periods: int) -> pd.DataFrame:
     # similiar to SMA, but revent days are given more weight, hence recent changes have stronger influence on sma
     # weighting factor can be changed, 2 is a common choice
     # not optimal, as every day is computed 20 times
@@ -79,7 +106,7 @@ def compute_EMA(stock_data: pd.DataFrame, num_periods: int):
     return stock_data
 
 
-def compute_MACD(stock_data: pd.DataFrame):
+def compute_MACD(stock_data: pd.DataFrame) -> pd.DataFrame:
     # Moving Average Convergence/divergence
     # formula: 12 day ema - 26 day ema
     stock_data['MACD'] = compute_EMA(stock_data=stock_data, num_periods=12) - compute_EMA(
@@ -88,7 +115,7 @@ def compute_MACD(stock_data: pd.DataFrame):
     return stock_data
 
 
-def compute_Bollinger_Bands(stock_data: pd.DataFrame):
+def compute_Bollinger_Bands(stock_data: pd.DataFrame) -> pd.DataFrame:
     # returns 2 values, the upper and lower bollinger band respectively
     # it is commonly calculated with the 20-day sma line
 

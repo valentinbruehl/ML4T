@@ -1,14 +1,6 @@
-VWAP (volume-weighted-average-price)
-
 Relative Strength index (RSI) --> speed and change of price movements
 
-Moving Average convergence divergence, e.g. relationship between 20 day ema and 100 day ema 
-
 Stochastic Oscillator (compares closing price with severel key historical prices (highs, lows)) --> indicates momentum
-
-Bollinger Bands (standard deviations of sma line (don't know which sma, but can check))
-
-exponential moving average (more weight to recent price moves --> more responsive to new information)
 
 put / call ratio --> not so relevant for large cap but might include anyway
 
