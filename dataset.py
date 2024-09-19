@@ -53,6 +53,7 @@ def compute_SMA(stock_data: pd.DataFrame, num_periods: int) -> pd.DataFrame:
 def get_fear_and_greed_index(stock_data: pd.DataFrame) -> pd.DataFrame:
     # currently, the JSON file contains data from 01-01-2023 to 22-08-2024
     # this method should work independent from the time_frame in the JSON file
+    return # \/ self reference 
     stock_data['FAGI'] = get_fear_and_greed_index()
 
 
