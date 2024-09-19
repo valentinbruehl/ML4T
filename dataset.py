@@ -139,6 +139,9 @@ def normalize_axis(x: torch.Tensor, axis=1) -> torch.Tensor:
     x_max, _idcs = torch.max(x, dim=axis, keepdim=True)
     return (x - x_min) / (x_max - x_min)
 
+###########################################################################################################################
+# Data getters
+###########################################################################################################################
 
 def _save_stock_data(stock_data: pd.DataFrame, file_path: Path, interval: str):
     os.makedirs(Path(__file__).resolve().parent /
@@ -149,6 +152,29 @@ def _save_stock_data(stock_data: pd.DataFrame, file_path: Path, interval: str):
         previous_stock_data.index = pd.to_datetime(previous_stock_data.index)
         stock_data = pd.concat([previous_stock_data, stock_data]).sort_index()
     stock_data.to_csv(file_path)
+
+
+def compute_indicators(stock_data: pd.DataFrame, sma_periods: list[int]) -> pd.DataFrame:
+    """compute all indicators
+    
+    adds the columns `EMA`, `Upper_Bollinger_Band`, `Lower_Bollinger_Band`, `MACD`, `VWAP`, `*SMA_[period]`, (`FAGI`), `RSI`"""
+    # compute ema
+    stock_data = compute_EMA(stock_data=stock_data, num_periods=20)
+    # compute Bollinger Bands
+    stock_data = compute_Bollinger_Bands(stock_data)
+    # compute MACD (moving average convergence divergence)
+    stock_data = compute_MACD(stock_data)
+    # compute VWAP
+    stock_data = compute_VWAP(stock_data)
+    # compute sma
+    for sma in sma_periods:
+        stock_data = compute_SMA(stock_data, sma)
+    # retrieve fear and greed index
+    stock_data = get_fear_and_greed_index(stock_data)
+    # compute RSI (relative strength index)
+    stock_data = compute_RSI(stock_data)
+
+    return stock_data
 
 # deprecated
 def _get_stock_data_by_symbol_yf(
@@ -212,6 +238,7 @@ def _get_stock_data_by_symbol_yf(
 #############################################################################################################
 # >>> caching behavior of the dataframe will be deprecated (for now !!!!!!!!) in favor of request caching <<<
 #############################################################################################################
+
 def get_stock_data_by_symbol_ibkr(
         symbol: str,
         start_date: datetime = None,
@@ -219,9 +246,22 @@ def get_stock_data_by_symbol_ibkr(
         interval: str = "15min",
         sma_periods: List[int] | None = None,
 ) -> pd.DataFrame:
+    """Get training data for a given symbol from IBKR Web API.
+
+    Args:
+        symbol (str): Ticker symbol of the stock.
+        start_date (datetime, optional): Start date. Defaults to None.
+        duration (str, optional): Total duration the data. Defaults to "1y".
+        interval (str, optional): Frequency of ticker information / Candle length. Defaults to "15min".
+        sma_periods (List[int] | None, optional): List of SMA to compute with the given number of periods. Defaults to [20, 50, 100].
+
+    Returns:
+        pd.DataFrame: Stock data.
+    """
     if sma_periods is None:
         sma_periods = [20, 50, 100]
 
+    # TODO: add start_date is None case
     # TODO: maybe add caching here
 
     # get data from ibkr api
@@ -232,21 +272,9 @@ def get_stock_data_by_symbol_ibkr(
         interval=interval,
         outsideRth=True,  # outside regular trading hours
     )
-    # compute ema
-    stock_data = compute_EMA(stock_data=stock_data, num_periods=20)
-    # compute Bollinger Bands
-    stock_data = compute_Bollinger_Bands(stock_data)
-    # compute MACD (moving average convergence divergence)
-    stock_data = compute_MACD(stock_data)
-    # compute VWAP
-    stock_data = compute_VWAP(stock_data)
-    # compute sma
-    for sma in sma_periods:
-        stock_data = compute_SMA(stock_data, sma)
-    # retrieve fear and greed index
-    stock_data = get_fear_and_greed_index(stock_data)
-    # compute RSI (relative strength index)
-    stock_data = compute_RSI(stock_data)
+    
+    # compute indicators
+    stock_data = compute_indicators(stock_data, sma_periods)
 
     return stock_data
 
@@ -374,7 +402,7 @@ def create_labels_local_min_max(
     x = torch.tensor(
         [
             stock_data["Open"],
-            stock_data["Adj Close"],
+            stock_data["Close"] if "Close" in stock_data.columns else stock_data["Adj Close"],
             stock_data["High"],
             stock_data["Low"],
             *[stock_data[f"SMA_{n}"] for n in sma_periods],
