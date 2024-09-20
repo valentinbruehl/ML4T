@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import pandas as pd
 import pandas_market_calendars as mcal
@@ -39,6 +40,16 @@ def get_trading_days(start_date, end_date, exchange="NYSE", dates_only=False):
     trading_days = nyse.schedule(start_date=start_date, end_date=end_date)
     dates_only_df = pd.DataFrame(trading_days.index.date)
     return dates_only_df if dates_only else trading_days
+
+def compute_realtive_day_of_year(stock_data: pd.DataFrame) -> pd.DataFrame:
+    df = datetime.fromtimestamp(stock_data['Time'])
+
+    day_of_year = df.timetuple().tm_yday
+
+    # normalisation with function f(x) = sin(2pi/365)
+    stock_data["Time"] = np.sin(2*np.pi * day_of_year / 365)
+
+    return stock_data
 
 
 def compute_SMA(stock_data: pd.DataFrame, num_periods: int) -> pd.DataFrame:
@@ -157,7 +168,11 @@ def _save_stock_data(stock_data: pd.DataFrame, file_path: Path, interval: str):
 def compute_indicators(stock_data: pd.DataFrame, sma_periods: list[int]) -> pd.DataFrame:
     """compute all indicators
     
+    changes colum 'Time' and
+
     adds the columns `EMA`, `Upper_Bollinger_Band`, `Lower_Bollinger_Band`, `MACD`, `VWAP`, `*SMA_[period]`, (`FAGI`), `RSI`"""
+    # computes relative time of the year
+    stock_data = compute_realtive_day_of_year(stock_data=stock_data)
     # compute ema
     stock_data = compute_EMA(stock_data=stock_data, num_periods=20)
     # compute Bollinger Bands
