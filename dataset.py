@@ -383,6 +383,23 @@ def _preprocess_data(data: pd.DataFrame, training_period: int) -> pd.DataFrame:
     # cut data
     return data[:training_period]
 
+def _compute_x(stock_data: pd.DataFrame, sma_periods: List[int] | None = None) -> torch.Tensor:
+    if sma_periods is None:
+        sma_periods = [20, 50, 100]
+    return torch.tensor(
+        [
+            stock_data["Open"],
+            stock_data["Close"] if "Close" in stock_data.columns else stock_data["Adj Close"],
+            stock_data["High"],
+            stock_data["Low"],
+            *[stock_data[f"SMA_{n}"] for n in sma_periods],
+            stock_data['VWAP'],
+            stock_data['EMA'],
+            stock_data['MACD'],
+            stock_data['Lower_Bollinger_Band'],
+            stock_data['Upper_Bollinger_Band'],
+        ]
+    )
 
 def create_labels_local_min_max(
     stock_data: pd.DataFrame,
@@ -390,8 +407,6 @@ def create_labels_local_min_max(
     extrema_distance: int,
     sma_periods: List[int] | None = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-    if sma_periods is None:
-        sma_periods = [20, 50, 100]
 
     stock_data = _preprocess_data(stock_data, training_period)
 
@@ -414,20 +429,7 @@ def create_labels_local_min_max(
     )
 
     # create x, y
-    x = torch.tensor(
-        [
-            stock_data["Open"],
-            stock_data["Close"] if "Close" in stock_data.columns else stock_data["Adj Close"],
-            stock_data["High"],
-            stock_data["Low"],
-            *[stock_data[f"SMA_{n}"] for n in sma_periods],
-            stock_data['VWAP'],
-            stock_data['EMA'],
-            stock_data['MACD'],
-            stock_data['Lower_Bollinger_Band'],
-            stock_data['Upper_Bollinger_Band'],
-        ]
-    )
+    x = _compute_x(stock_data, sma_periods)
     y = []
     # TODO: remove later if not triggered
     assert len(stock_data["Min"].shape) == 1
