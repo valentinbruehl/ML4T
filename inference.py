@@ -1,4 +1,6 @@
 import torch
+import math
+import time
 from torch import nn
 import pandas as pd
 import numpy as np
@@ -42,8 +44,10 @@ def _find_sma_periods(data: pd.DataFrame):
             )
     return sma_periods
 
-def load_state_dict():
-    return 
+def load_state_dict(): 
+    # TODO: implement logic to properly load the lastest model checkpoint
+    raise NotImplementedError
+    return
 
 class _ML_Strat(Strategy):
     takeProfitPerc = 0.15
@@ -74,6 +78,8 @@ class _ML_Strat(Strategy):
             )
         # perform model inference
         self._complete_inference()
+        # track holding time
+        self.reset_buy_in()
 
     def _complete_inference(self):
         # new column for predictions
@@ -92,6 +98,15 @@ class _ML_Strat(Strategy):
     @property
     def _cash(self):
         return self._broker._cash
+
+    def buy(self, *, size: float = ..., limit: float = None, stop: float = None, sl: float = None, tp: float = None):
+        # override buy method to implement tracking time
+        order = super().buy(size=size, limit=limit, stop=stop, sl=sl, tp=tp)
+        self._buy_in = min(self._buy_in, time.time())  # use first buy in
+        return order
+
+    def reset_buy_in(self):
+        self._buy_in = math.inf
 
     def next(self):
         # NOTE: according to docs are all dataframes np arrays now
@@ -146,9 +161,15 @@ class _ML_Strat(Strategy):
             self.position.close(
                 portion=1  # this is better documentation
             )
+            self.reset_buy_in()
 
         # case 5: position & max hold time reached
-        # TODO: implement this case
+        if (time.time() - self._buy_in) >= (self.maxHoldTime * 24 * 60 * 60):
+            self.position.close(
+                portion=1
+            )
+            self.reset_buy_in()
+            
 
 
 def backtest(stock_data: pd.DataFrame):
