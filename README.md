@@ -28,7 +28,9 @@ After this `ibkr\api.py` should be functional.
     - Relative Strength index (RSI) --> speed and change of price movements
     - Stochastic Oscillator (compares closing price with severel key historical prices (highs, lows)) --> indicates momentum
     - put / call ratio --> not so relevant for large cap but might include anyway
-    - some general economic indicator related to gdp growth, unemployment rate etc. --> Need to find an indicator which updates more regularly than once a month
+    - some general economic indicator related to gdp growth, unemployment rate etc.
+    --> use "Public Data API" by the U.S. BUREAU OF LABOR STATISTICS
+
     - Index Performances: SPX, sector indexes, emerging markets, small cap indexes
     - bid/ask spread --> provides insight into market liquidity and volatility (I think: high spread --> low liquidity)
     - Days until next financial data release or annual shareholder meeting
