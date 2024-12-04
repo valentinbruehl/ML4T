@@ -32,9 +32,9 @@ After this `ibkr\api.py` should be functional.
     --> use "Public Data API" by the U.S. BUREAU OF LABOR STATISTICS
 
     - Index Performances: SPX, sector indexes, emerging markets, small cap indexes
-    - bid/ask spread --> provides insight into market liquidity and volatility (I think: high spread --> low liquidity)
+    - bid/ask spread --> provides insight into market liquidity and volatility
     - Days until next financial data release or annual shareholder meeting
-    - previous candles (?)
+    - previous candles
 - Fixes:
     - properly implement fear and greed data (eg. for different candle sizes)
     - rate limits on IBKR Gateway are not properly implemented (should be different for some requests)
