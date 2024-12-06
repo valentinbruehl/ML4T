@@ -7,6 +7,8 @@ venv
 __pycache__
 # vscode
 .vscode
+# intellij
+.idea
 # ibkr folder (i dont want to upload my api key lol)
 ibkr/*
 !ibkr/api.py
