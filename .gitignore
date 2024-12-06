@@ -12,3 +12,5 @@ __pycache__
 # ibkr folder (i dont want to upload my api key lol)
 ibkr/*
 !ibkr/api.py
+# model checkpoint folder
+checkpoints

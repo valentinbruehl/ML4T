@@ -18,6 +18,7 @@ def _inference(
         model: nn.Module,
         input: torch.Tensor
 ) -> torch.Tensor:
+    # inference function
     model = model.eval().to(device)
     while len(input.shape) < 2:
         input = input.unsqueeze(0)
@@ -32,10 +33,13 @@ def _inference(
 # https://kernc.github.io/backtesting.py/doc/examples/Quick%20Start%20User%20Guide.html
 # https://kernc.github.io/backtesting.py/doc/backtesting/backtesting.html
 
-def precomputed(data): return data
+def precomputed(data): 
+    # identity function
+    return data
 
 
 def _find_sma_periods(data: pd.DataFrame):
+    # extracts all sma periods from the column names of a given dataframe (data)
     sma_periods = []
     for col in data.columns.to_list():
         if "sma" in col:
@@ -45,11 +49,13 @@ def _find_sma_periods(data: pd.DataFrame):
     return sma_periods
 
 def load_state_dict(): 
+    """Loads the state dict of the latest model."""
     # TODO: implement logic to properly load the lastest model checkpoint
     raise NotImplementedError
     return
 
 class _ML_Strat(Strategy):
+    """Implements predictions via ML models for backtesting"""
     takeProfitPerc = 0.15
     """P/L% to sell after. (eg. for `0.15`: if the stock increases by 15% the algo sells)"""
     stopLossPerc = 0.1
@@ -173,6 +179,7 @@ class _ML_Strat(Strategy):
 
 
 def backtest(stock_data: pd.DataFrame):
+    """Does backtesting for the latest model and a given dataset."""
     # drop nans
     stock_data = _preprocess_data(stock_data, None)
 
